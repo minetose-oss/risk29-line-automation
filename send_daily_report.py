@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Risk29 Daily Morning Report - LINE Notification
-Sends automated daily risk summary to LINE Notify at 8 AM GMT+7
+Risk29 Daily Morning Report - LINE Messaging API
+Sends automated daily risk summary to LINE via Messaging API at 8 AM GMT+7
 """
 
 import os
@@ -13,7 +13,7 @@ import pytz
 # Configuration
 DASHBOARD_URL = "https://riskdash-h38zfvrd.manus.space"
 RISK_DATA_URL = f"{DASHBOARD_URL}/risk_data.json"
-LINE_NOTIFY_API = "https://notify-api.line.me/api/notify"
+LINE_MESSAGING_API = "https://api.line.me/v2/bot/message/push"
 
 def get_risk_data():
     """Fetch risk data from dashboard"""
@@ -138,22 +138,32 @@ Total Signals Analyzed: {signal_counts['total']}
     
     return message
 
-def send_line_notify(message, token):
-    """Send message via LINE Notify API"""
+def send_line_message(message, channel_access_token, user_id):
+    """Send message via LINE Messaging API"""
     headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Authorization': f'Bearer {channel_access_token}',
+        'Content-Type': 'application/json'
     }
     
-    data = {'message': message}
+    data = {
+        'to': user_id,
+        'messages': [
+            {
+                'type': 'text',
+                'text': message
+            }
+        ]
+    }
     
     try:
-        response = requests.post(LINE_NOTIFY_API, headers=headers, data=data, timeout=10)
+        response = requests.post(LINE_MESSAGING_API, headers=headers, json=data, timeout=10)
         response.raise_for_status()
-        print(f"✅ LINE notification sent successfully at {datetime.now()}")
+        print(f"✅ LINE message sent successfully at {datetime.now()}")
         return True
     except Exception as e:
-        print(f"❌ Error sending LINE notification: {e}")
+        print(f"❌ Error sending LINE message: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Response: {e.response.text}")
         return False
 
 def main():
@@ -162,11 +172,18 @@ def main():
     print("Risk29 Daily Morning Report")
     print("=" * 50)
     
-    # Get LINE token from environment variable
-    line_token = os.getenv('LINE_NOTIFY_TOKEN')
-    if not line_token:
-        print("❌ ERROR: LINE_NOTIFY_TOKEN environment variable not set")
-        print("Please set it in GitHub Secrets or environment variables")
+    # Get LINE credentials from environment variables
+    channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+    user_id = os.getenv('LINE_USER_ID')
+    
+    if not channel_access_token:
+        print("❌ ERROR: LINE_CHANNEL_ACCESS_TOKEN environment variable not set")
+        print("Please set it in GitHub Secrets")
+        return False
+    
+    if not user_id:
+        print("❌ ERROR: LINE_USER_ID environment variable not set")
+        print("Please set it in GitHub Secrets")
         return False
     
     # Fetch risk data
@@ -188,8 +205,8 @@ def main():
     print("-" * 50)
     
     # Send to LINE
-    print("\n📤 Sending to LINE Notify...")
-    success = send_line_notify(message, line_token)
+    print("\n📤 Sending to LINE Messaging API...")
+    success = send_line_message(message, channel_access_token, user_id)
     
     if success:
         print("\n🎉 Daily report sent successfully!")
