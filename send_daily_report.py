@@ -44,6 +44,26 @@ def calculate_overall_risk(data):
     
     return round(total_score / total_weight if total_weight > 0 else 0, 1)
 
+def get_risk_level_color(score):
+    """Get color based on risk score"""
+    if score >= 70:
+        return "#EF4444"  # Red - High Risk
+    elif score >= 40:
+        return "#F59E0B"  # Orange - Medium Risk
+    else:
+        return "#10B981"  # Green - Low Risk
+
+def get_risk_level_text(score):
+    """Get risk level text"""
+    if score >= 70:
+        return "Alert"
+    elif score >= 60:
+        return "Warning"
+    elif score >= 40:
+        return "Watch"
+    else:
+        return "Info"
+
 def get_top_risk_categories(data, top_n=3):
     """Get top N highest risk categories"""
     if not data or 'categories' not in data:
@@ -58,85 +78,231 @@ def get_top_risk_categories(data, top_n=3):
     
     return [(name, cat_data.get('score', 0)) for name, cat_data in sorted_categories[:top_n]]
 
-def count_signals_by_risk(data):
-    """Count signals by risk level"""
-    if not data or 'categories' not in data:
-        return {'high': 0, 'medium': 0, 'low': 0, 'total': 0}
-    
-    high_count = 0
-    medium_count = 0
-    low_count = 0
-    total_count = 0
-    
-    for category_data in data['categories'].values():
-        signals = category_data.get('signals', [])
-        for signal in signals:
-            total_count += 1
-            score = signal.get('score', 0)
-            if score >= 70:
-                high_count += 1
-            elif score >= 40:
-                medium_count += 1
-            else:
-                low_count += 1
-    
-    return {
-        'high': high_count,
-        'medium': medium_count,
-        'low': low_count,
-        'total': total_count
-    }
-
-def format_message(data):
-    """Format risk summary message for LINE"""
+def create_flex_message(data):
+    """Create LINE Flex Message with dashboard design"""
     # Get current time in GMT+7
     tz = pytz.timezone('Asia/Bangkok')
     now = datetime.now(tz)
     date_str = now.strftime('%Y-%m-%d')
-    time_str = now.strftime('%H:%M')
     
     # Calculate metrics
     overall_risk = calculate_overall_risk(data)
-    top_categories = get_top_risk_categories(data)
-    signal_counts = count_signals_by_risk(data)
+    overall_color = get_risk_level_color(overall_risk)
+    risk_level = get_risk_level_text(overall_risk)
     
-    # Format category names with emojis
-    category_emojis = {
-        'liquidity': '💧',
-        'valuation': '📊',
-        'macro': '🌍',
-        'credit': '💳',
-        'technical': '🔧',
-        'sentiment': '😊',
-        'qualitative': '📋',
-        'global': '🌐'
+    # Get all categories with scores
+    categories = data.get('categories', {})
+    category_items = []
+    
+    # Category display names and emojis
+    category_info = {
+        'liquidity': {'name': 'Liquidity', 'emoji': '💧'},
+        'valuation': {'name': 'Valuation', 'emoji': '📊'},
+        'credit': {'name': 'Credit', 'emoji': '💳'},
+        'macro': {'name': 'Macro', 'emoji': '📈'},
+        'global': {'name': 'Global', 'emoji': '🌐'},
+        'technical': {'name': 'Technical', 'emoji': '🔧'},
+        'sentiment': {'name': 'Sentiment', 'emoji': '😊'},
+        'qualitative': {'name': 'Qualitative', 'emoji': '📋'}
     }
     
-    # Build message
-    message = f"""🎯 Risk29 Morning Summary
-📅 {date_str} {time_str}
-
-📊 Overall Risk Score: {overall_risk}/100
-
-⚠️ Top Risk Categories:"""
+    # Sort categories by score (highest first)
+    sorted_cats = sorted(categories.items(), key=lambda x: x[1].get('score', 0), reverse=True)
     
-    for cat_name, score in top_categories:
-        emoji = category_emojis.get(cat_name.lower(), '📌')
-        display_name = cat_name.capitalize()
-        message += f"\n• {emoji} {display_name}: {score}"
+    for cat_key, cat_data in sorted_cats:
+        score = cat_data.get('score', 0)
+        info = category_info.get(cat_key, {'name': cat_key.capitalize(), 'emoji': '📌'})
+        color = get_risk_level_color(score)
+        
+        category_items.append({
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": f"{info['emoji']} {info['name']}",
+                    "size": "sm",
+                    "color": "#666666",
+                    "flex": 3
+                },
+                {
+                    "type": "text",
+                    "text": str(int(score)),
+                    "size": "sm",
+                    "color": color,
+                    "align": "end",
+                    "weight": "bold",
+                    "flex": 1
+                }
+            ],
+            "margin": "md"
+        })
     
-    message += f"""
-
-📈 Signal Summary:
-• High Risk: {signal_counts['high']} signals
-• Medium Risk: {signal_counts['medium']} signals
-• Low Risk: {signal_counts['low']} signals
-
-Total Signals Analyzed: {signal_counts['total']}
-
-✅ Pipeline executed successfully"""
+    # Get top 3 risks for highlights
+    top_risks = get_top_risk_categories(data, 3)
+    top_risk_text = "\n".join([
+        f"• {category_info.get(cat, {'name': cat.capitalize()})['name']} ~{int(score)}"
+        for cat, score in top_risks
+    ])
     
-    return message
+    # Create Flex Message
+    flex_message = {
+        "type": "flex",
+        "altText": f"🎯 Risk29 Morning Summary - Overall Risk: {overall_risk}/100",
+        "contents": {
+            "type": "bubble",
+            "size": "mega",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📊 RISK-29",
+                                "color": "#FFFFFF",
+                                "size": "xl",
+                                "weight": "bold"
+                            },
+                            {
+                                "type": "text",
+                                "text": risk_level,
+                                "color": "#FFFFFF",
+                                "size": "xs",
+                                "align": "end",
+                                "gravity": "center"
+                            }
+                        ]
+                    }
+                ],
+                "backgroundColor": "#1E40AF",
+                "paddingAll": "20px"
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "ระดับความเสี่ยง",
+                                "size": "sm",
+                                "color": "#666666"
+                            },
+                            {
+                                "type": "text",
+                                "text": "คะแนนรวม",
+                                "size": "xs",
+                                "color": "#999999",
+                                "margin": "xs"
+                            },
+                            {
+                                "type": "text",
+                                "text": f"{overall_risk} / 100",
+                                "size": "xxl",
+                                "weight": "bold",
+                                "color": overall_color,
+                                "margin": "md"
+                            }
+                        ],
+                        "backgroundColor": "#F3F4F6",
+                        "paddingAll": "15px",
+                        "cornerRadius": "8px"
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "xl"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "📈 คะแนนตามหมวด",
+                                "size": "md",
+                                "weight": "bold",
+                                "color": "#1F2937"
+                            }
+                        ] + category_items,
+                        "margin": "xl"
+                    },
+                    {
+                        "type": "separator",
+                        "margin": "xl"
+                    },
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "⚠️ จุดเสี่ยงสูงสุด",
+                                "size": "md",
+                                "weight": "bold",
+                                "color": "#1F2937"
+                            },
+                            {
+                                "type": "text",
+                                "text": top_risk_text,
+                                "size": "sm",
+                                "color": "#666666",
+                                "wrap": True,
+                                "margin": "md"
+                            }
+                        ],
+                        "margin": "xl"
+                    }
+                ],
+                "paddingAll": "20px"
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": f"📅 {date_str}",
+                                "size": "xs",
+                                "color": "#999999"
+                            },
+                            {
+                                "type": "text",
+                                "text": "Risk29 Free-Real PLUS",
+                                "size": "xs",
+                                "color": "#999999",
+                                "align": "end"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "uri",
+                            "label": "ดูแดชบอร์ดแบบเต็ม",
+                            "uri": DASHBOARD_URL
+                        },
+                        "style": "primary",
+                        "color": "#10B981",
+                        "margin": "md"
+                    }
+                ],
+                "paddingAll": "20px"
+            }
+        }
+    }
+    
+    return flex_message
 
 def send_line_message(message, channel_access_token, user_id):
     """Send message via LINE Messaging API"""
@@ -147,12 +313,7 @@ def send_line_message(message, channel_access_token, user_id):
     
     data = {
         'to': user_id,
-        'messages': [
-            {
-                'type': 'text',
-                'text': message
-            }
-        ]
+        'messages': [message]
     }
     
     try:
@@ -196,17 +357,14 @@ def main():
     
     print("✅ Risk data fetched successfully")
     
-    # Format message
-    print("📝 Formatting message...")
-    message = format_message(risk_data)
-    print("\nMessage to send:")
-    print("-" * 50)
-    print(message)
-    print("-" * 50)
+    # Create Flex Message
+    print("🎨 Creating dashboard Flex Message...")
+    flex_message = create_flex_message(risk_data)
+    print("✅ Flex Message created")
     
     # Send to LINE
     print("\n📤 Sending to LINE Messaging API...")
-    success = send_line_message(message, channel_access_token, user_id)
+    success = send_line_message(flex_message, channel_access_token, user_id)
     
     if success:
         print("\n🎉 Daily report sent successfully!")
