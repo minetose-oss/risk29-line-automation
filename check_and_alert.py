@@ -11,7 +11,7 @@ from datetime import datetime
 import pytz
 
 # Configuration
-DASHBOARD_URL = "https://riskdash-h38zfvrd.manus.space"
+DASHBOARD_URL = "https://minetose-oss.github.io/risk29-dashboard"
 RISK_DATA_URL = f"{DASHBOARD_URL}/risk_data.json"
 LINE_MESSAGING_API = "https://api.line.me/v2/bot/message/push"
 ALERT_STATE_FILE = "/tmp/risk29_alert_state.json"
